@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useProducts } from '@/contexts/ProductContext';
 import Cart from '@/components/Cart';
 import Orders from '@/components/Orders';
+import UserProfile from '@/components/UserProfile';
 
 const BuyerDashboard = () => {
   const [user, setUser] = useState<any>(null);
@@ -99,6 +101,11 @@ const BuyerDashboard = () => {
     ));
   };
 
+  const truncateText = (text: string, maxLength: number) => {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
+  };
+
   if (!user) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -123,7 +130,7 @@ const BuyerDashboard = () => {
           </div>
           <div className="flex items-center space-x-4">
             <Cart />
-            <span className="text-sm text-gray-600">Welcome, {user.name}</span>
+            <UserProfile />
             <Button variant="outline" onClick={handleLogout}>
               Logout
             </Button>
@@ -169,7 +176,7 @@ const BuyerDashboard = () => {
             {/* Products Grid */}
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredProducts.map((product) => (
-                <Card key={product.id} className="hover:shadow-lg transition-shadow">
+                <Card key={product.id} className="hover:shadow-lg transition-shadow h-full flex flex-col">
                   {product.image && (
                     <div className="w-full h-48 overflow-hidden rounded-t-lg">
                       <img 
@@ -179,7 +186,7 @@ const BuyerDashboard = () => {
                       />
                     </div>
                   )}
-                  <CardHeader>
+                  <CardHeader className="flex-grow">
                     <div className="flex justify-between items-start mb-2">
                       <Badge variant="secondary" className="capitalize">
                         {product.category.replace('-', ' ')}
@@ -194,8 +201,10 @@ const BuyerDashboard = () => {
                       Sold by: {product.seller}
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-gray-700 mb-4">{product.description}</p>
+                  <CardContent className="pt-0">
+                    <p className="text-sm text-gray-700 mb-4 min-h-[2.5rem]">
+                      {truncateText(product.description, 80)}
+                    </p>
                     <div className="flex justify-between items-center mb-4">
                       <div>
                         <div className="text-2xl font-bold text-green-600">

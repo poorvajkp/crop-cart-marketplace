@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { X, ShoppingCart, Plus, Minus } from 'lucide-react';
 import { useProducts } from '@/contexts/ProductContext';
 import Checkout from './Checkout';
@@ -37,16 +38,16 @@ const Cart = () => {
   if (showCheckout) {
     return (
       <Sheet open={true} onOpenChange={() => setShowCheckout(false)}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-lg">
           <SheetHeader>
             <SheetTitle>Checkout</SheetTitle>
             <SheetDescription>
               Complete your order details
             </SheetDescription>
           </SheetHeader>
-          <div className="mt-6">
+          <ScrollArea className="h-[calc(100vh-100px)] mt-6">
             <Checkout onClose={() => setShowCheckout(false)} />
-          </div>
+          </ScrollArea>
         </SheetContent>
       </Sheet>
     );
@@ -73,7 +74,7 @@ const Cart = () => {
           </SheetDescription>
         </SheetHeader>
         
-        <div className="mt-6 space-y-4">
+        <div className="mt-6 h-full flex flex-col">
           {cartItems.length === 0 ? (
             <div className="text-center py-8">
               <ShoppingCart className="w-16 h-16 mx-auto text-gray-400 mb-4" />
@@ -81,61 +82,65 @@ const Cart = () => {
             </div>
           ) : (
             <>
-              {cartItems.map((item) => (
-                <Card key={item!.id} className="p-3">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-sm">{item!.name}</h4>
-                      <p className="text-xs text-gray-600 mb-1">{item!.seller}</p>
-                      <div className="text-green-600 font-bold">${item!.price}</div>
-                      <p className="text-xs text-gray-500">Stock: {item!.quantity}</p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => removeFromCart(item!.id)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => updateQuantity(item!.id, item!.cartQuantity - 1)}
-                        disabled={item!.cartQuantity <= 1}
-                      >
-                        <Minus className="w-3 h-3" />
-                      </Button>
-                      <Input
-                        type="number"
-                        value={item!.cartQuantity}
-                        onChange={(e) => updateQuantity(item!.id, parseInt(e.target.value) || 1)}
-                        className="w-16 text-center"
-                        min="1"
-                        max={item!.quantity}
-                      />
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => updateQuantity(item!.id, item!.cartQuantity + 1)}
-                        disabled={item!.cartQuantity >= item!.quantity}
-                      >
-                        <Plus className="w-3 h-3" />
-                      </Button>
-                    </div>
-                    <div className="text-sm font-semibold">
-                      ${(item!.price * item!.cartQuantity).toFixed(2)}
-                    </div>
-                  </div>
-                </Card>
-              ))}
+              <ScrollArea className="flex-1 pr-4">
+                <div className="space-y-4">
+                  {cartItems.map((item) => (
+                    <Card key={item!.id} className="p-3">
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-sm">{item!.name}</h4>
+                          <p className="text-xs text-gray-600 mb-1">{item!.seller}</p>
+                          <div className="text-green-600 font-bold">${item!.price}</div>
+                          <p className="text-xs text-gray-500">Stock: {item!.quantity}</p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => removeFromCart(item!.id)}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => updateQuantity(item!.id, item!.cartQuantity - 1)}
+                            disabled={item!.cartQuantity <= 1}
+                          >
+                            <Minus className="w-3 h-3" />
+                          </Button>
+                          <Input
+                            type="number"
+                            value={item!.cartQuantity}
+                            onChange={(e) => updateQuantity(item!.id, parseInt(e.target.value) || 1)}
+                            className="w-16 text-center"
+                            min="1"
+                            max={item!.quantity}
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => updateQuantity(item!.id, item!.cartQuantity + 1)}
+                            disabled={item!.cartQuantity >= item!.quantity}
+                          >
+                            <Plus className="w-3 h-3" />
+                          </Button>
+                        </div>
+                        <div className="text-sm font-semibold">
+                          ${(item!.price * item!.cartQuantity).toFixed(2)}
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              </ScrollArea>
               
-              <div className="border-t pt-4 mt-4">
-                <div className="flex justify-between items-center mb-4">
+              <div className="border-t pt-4 mt-4 space-y-4">
+                <div className="flex justify-between items-center">
                   <span className="font-semibold">Total:</span>
                   <span className="font-bold text-lg text-green-600">${total.toFixed(2)}</span>
                 </div>

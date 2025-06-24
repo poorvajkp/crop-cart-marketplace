@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useProducts } from '@/contexts/ProductContext';
 import { useToast } from "@/hooks/use-toast";
-import { CreditCard, MapPin, Clock } from 'lucide-react';
+import { CreditCard, MapPin, Clock, Smartphone, Building } from 'lucide-react';
 
 interface CheckoutProps {
   onClose: () => void;
@@ -20,6 +20,27 @@ const Checkout: React.FC<CheckoutProps> = ({ onClose }) => {
   const [paymentMethod, setPaymentMethod] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Payment method specific fields
+  const [cardNumber, setCardNumber] = useState('');
+  const [expiryDate, setExpiryDate] = useState('');
+  const [cvv, setCvv] = useState('');
+  const [cardName, setCardName] = useState('');
+  const [upiId, setUpiId] = useState('');
+  const [bankAccount, setBankAccount] = useState('');
+  const [ifscCode, setIfscCode] = useState('');
+
+  useEffect(() => {
+    // Pre-fill delivery address from user profile if available
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      const user = JSON.parse(userData);
+      if (user.address) {
+        const fullAddress = `${user.address}, ${user.city}, ${user.state} - ${user.zipCode}`.replace(/,\s*,/g, ',').replace(/^,\s*|,\s*$/g, '');
+        setDeliveryAddress(fullAddress);
+      }
+    }
+  }, []);
 
   const cartItems = cart.map(cartItem => {
     const product = products.find(p => p.id === cartItem.productId);
@@ -27,6 +48,58 @@ const Checkout: React.FC<CheckoutProps> = ({ onClose }) => {
   }).filter(Boolean);
 
   const total = cartItems.reduce((sum, item) => sum + (item!.price * item!.cartQuantity), 0);
+
+  const validatePaymentMethod = () => {
+    switch (paymentMethod) {
+      case 'card':
+        if (!cardNumber || !expiryDate || !cvv || !cardName) {
+          toast({
+            title: "Incomplete Card Details",
+            description: "Please fill in all card information.",
+            variant: "destructive"
+          });
+          return false;
+        }
+        if (cardNumber.length < 16) {
+          toast({
+            title: "Invalid Card Number",
+            description: "Card number must be 16 digits.",
+            variant: "destructive"
+          });
+          return false;
+        }
+        break;
+      case 'upi':
+        if (!upiId) {
+          toast({
+            title: "Missing UPI ID",
+            description: "Please enter your UPI ID.",
+            variant: "destructive"
+          });
+          return false;
+        }
+        if (!upiId.includes('@')) {
+          toast({
+            title: "Invalid UPI ID",
+            description: "Please enter a valid UPI ID (e.g., user@paytm).",
+            variant: "destructive"
+          });
+          return false;
+        }
+        break;
+      case 'bank':
+        if (!bankAccount || !ifscCode) {
+          toast({
+            title: "Incomplete Bank Details",
+            description: "Please fill in all bank information.",
+            variant: "destructive"
+          });
+          return false;
+        }
+        break;
+    }
+    return true;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,9 +113,12 @@ const Checkout: React.FC<CheckoutProps> = ({ onClose }) => {
       return;
     }
 
+    if (!validatePaymentMethod()) {
+      return;
+    }
+
     setIsSubmitting(true);
 
-    // Get current user data
     const userData = localStorage.getItem('user');
     if (!userData) {
       toast({
@@ -57,7 +133,6 @@ const Checkout: React.FC<CheckoutProps> = ({ onClose }) => {
     const user = JSON.parse(userData);
 
     try {
-      // Create order data
       const orderProducts = cartItems.map(item => ({
         productId: item!.id,
         productName: item!.name,
@@ -92,6 +167,111 @@ const Checkout: React.FC<CheckoutProps> = ({ onClose }) => {
       });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const renderPaymentFields = () => {
+    switch (paymentMethod) {
+      case 'card':
+        return (
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="cardName">Cardholder Name</Label>
+              <Input
+                id="cardName"
+                placeholder="John Doe"
+                value={cardName}
+                onChange={(e) => setCardName(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="cardNumber">Card Number</Label>
+              <Input
+                id="cardNumber"
+                placeholder="1234 5678 9012 3456"
+                value={cardNumber}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\s/g, '').replace(/\D/g, '');
+                  setCardNumber(value);
+                }}
+                maxLength={16}
+                required
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="expiryDate">Expiry Date</Label>
+                <Input
+                  id="expiryDate"
+                  placeholder="MM/YY"
+                  value={expiryDate}
+                  onChange={(e) => {
+                    let value = e.target.value.replace(/\D/g, '');
+                    if (value.length >= 2) {
+                      value = value.substring(0, 2) + '/' + value.substring(2, 4);
+                    }
+                    setExpiryDate(value);
+                  }}
+                  maxLength={5}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="cvv">CVV</Label>
+                <Input
+                  id="cvv"
+                  placeholder="123"
+                  value={cvv}
+                  onChange={(e) => setCvv(e.target.value.replace(/\D/g, ''))}
+                  maxLength={3}
+                  required
+                />
+              </div>
+            </div>
+          </div>
+        );
+      case 'upi':
+        return (
+          <div>
+            <Label htmlFor="upiId">UPI ID</Label>
+            <Input
+              id="upiId"
+              placeholder="user@paytm"
+              value={upiId}
+              onChange={(e) => setUpiId(e.target.value)}
+              required
+            />
+            <p className="text-xs text-gray-500 mt-1">Enter your UPI ID (e.g., user@paytm, user@googlepay)</p>
+          </div>
+        );
+      case 'bank':
+        return (
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="bankAccount">Bank Account Number</Label>
+              <Input
+                id="bankAccount"
+                placeholder="1234567890"
+                value={bankAccount}
+                onChange={(e) => setBankAccount(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="ifscCode">IFSC Code</Label>
+              <Input
+                id="ifscCode"
+                placeholder="SBIN0001234"
+                value={ifscCode}
+                onChange={(e) => setIfscCode(e.target.value.toUpperCase())}
+                required
+              />
+            </div>
+          </div>
+        );
+      default:
+        return null;
     }
   };
 
@@ -130,7 +310,7 @@ const Checkout: React.FC<CheckoutProps> = ({ onClose }) => {
               Payment Method
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <Select value={paymentMethod} onValueChange={setPaymentMethod} required>
               <SelectTrigger>
                 <SelectValue placeholder="Select payment method" />
@@ -142,6 +322,8 @@ const Checkout: React.FC<CheckoutProps> = ({ onClose }) => {
                 <SelectItem value="bank">Bank Transfer</SelectItem>
               </SelectContent>
             </Select>
+            
+            {renderPaymentFields()}
           </CardContent>
         </Card>
 
