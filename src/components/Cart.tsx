@@ -1,10 +1,12 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { X, ShoppingCart } from 'lucide-react';
+import { Input } from "@/components/ui/input";
+import { X, ShoppingCart, Plus, Minus } from 'lucide-react';
 import { useProducts } from '@/contexts/ProductContext';
+import Checkout from './Checkout';
 import {
   Sheet,
   SheetContent,
@@ -15,10 +17,40 @@ import {
 } from "@/components/ui/sheet";
 
 const Cart = () => {
-  const { products, cart, removeFromCart, clearCart } = useProducts();
+  const { products, cart, removeFromCart, updateCartQuantity, clearCart } = useProducts();
+  const [showCheckout, setShowCheckout] = useState(false);
 
-  const cartItems = cart.map(itemId => products.find(p => p.id === itemId)).filter(Boolean);
-  const total = cartItems.reduce((sum, item) => sum + (item?.price || 0), 0);
+  const cartItems = cart.map(cartItem => {
+    const product = products.find(p => p.id === cartItem.productId);
+    return product ? { ...product, cartQuantity: cartItem.quantity } : null;
+  }).filter(Boolean);
+
+  const total = cartItems.reduce((sum, item) => sum + (item!.price * item!.cartQuantity), 0);
+
+  const updateQuantity = (productId: string, newQuantity: number) => {
+    const product = products.find(p => p.id === productId);
+    if (product && newQuantity <= product.quantity) {
+      updateCartQuantity(productId, newQuantity);
+    }
+  };
+
+  if (showCheckout) {
+    return (
+      <Sheet open={true} onOpenChange={() => setShowCheckout(false)}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Checkout</SheetTitle>
+            <SheetDescription>
+              Complete your order details
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-6">
+            <Checkout onClose={() => setShowCheckout(false)} />
+          </div>
+        </SheetContent>
+      </Sheet>
+    );
+  }
 
   return (
     <Sheet>
@@ -28,7 +60,7 @@ const Cart = () => {
           Cart
           {cart.length > 0 && (
             <Badge className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-              {cart.length}
+              {cart.reduce((sum, item) => sum + item.quantity, 0)}
             </Badge>
           )}
         </Button>
@@ -37,7 +69,7 @@ const Cart = () => {
         <SheetHeader>
           <SheetTitle>Shopping Cart</SheetTitle>
           <SheetDescription>
-            {cart.length} items in your cart
+            {cart.reduce((sum, item) => sum + item.quantity, 0)} items in your cart
           </SheetDescription>
         </SheetHeader>
         
@@ -50,21 +82,54 @@ const Cart = () => {
           ) : (
             <>
               {cartItems.map((item) => (
-                <Card key={item?.id} className="p-3">
-                  <div className="flex justify-between items-start">
+                <Card key={item!.id} className="p-3">
+                  <div className="flex justify-between items-start mb-3">
                     <div className="flex-1">
-                      <h4 className="font-semibold text-sm">{item?.name}</h4>
-                      <p className="text-xs text-gray-600 mb-2">{item?.seller}</p>
-                      <div className="text-green-600 font-bold">${item?.price}</div>
+                      <h4 className="font-semibold text-sm">{item!.name}</h4>
+                      <p className="text-xs text-gray-600 mb-1">{item!.seller}</p>
+                      <div className="text-green-600 font-bold">${item!.price}</div>
+                      <p className="text-xs text-gray-500">Stock: {item!.quantity}</p>
                     </div>
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => removeFromCart(item?.id || '')}
+                      onClick={() => removeFromCart(item!.id)}
                       className="text-red-500 hover:text-red-700"
                     >
                       <X className="w-4 h-4" />
                     </Button>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => updateQuantity(item!.id, item!.cartQuantity - 1)}
+                        disabled={item!.cartQuantity <= 1}
+                      >
+                        <Minus className="w-3 h-3" />
+                      </Button>
+                      <Input
+                        type="number"
+                        value={item!.cartQuantity}
+                        onChange={(e) => updateQuantity(item!.id, parseInt(e.target.value) || 1)}
+                        className="w-16 text-center"
+                        min="1"
+                        max={item!.quantity}
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => updateQuantity(item!.id, item!.cartQuantity + 1)}
+                        disabled={item!.cartQuantity >= item!.quantity}
+                      >
+                        <Plus className="w-3 h-3" />
+                      </Button>
+                    </div>
+                    <div className="text-sm font-semibold">
+                      ${(item!.price * item!.cartQuantity).toFixed(2)}
+                    </div>
                   </div>
                 </Card>
               ))}
@@ -76,8 +141,11 @@ const Cart = () => {
                 </div>
                 
                 <div className="space-y-2">
-                  <Button className="w-full bg-blue-600 hover:bg-blue-700">
-                    Checkout
+                  <Button 
+                    className="w-full bg-blue-600 hover:bg-blue-700"
+                    onClick={() => setShowCheckout(true)}
+                  >
+                    Proceed to Checkout
                   </Button>
                   <Button 
                     variant="outline" 
