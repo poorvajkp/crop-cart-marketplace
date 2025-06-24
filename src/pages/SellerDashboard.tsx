@@ -30,18 +30,28 @@ const SellerDashboard = () => {
   useEffect(() => {
     const userData = localStorage.getItem('user');
     if (!userData) {
+      toast({
+        title: "Access Denied",
+        description: "Please log in to access the seller dashboard.",
+        variant: "destructive"
+      });
       navigate('/login');
       return;
     }
     
     const parsedUser = JSON.parse(userData);
     if (parsedUser.role !== 'seller') {
+      toast({
+        title: "Access Denied",
+        description: "This dashboard is for sellers only. Redirecting to buyer dashboard...",
+        variant: "destructive"
+      });
       navigate('/buyer-dashboard');
       return;
     }
     
     setUser(parsedUser);
-  }, [navigate]);
+  }, [navigate, toast]);
 
   const handleLogout = () => {
     localStorage.removeItem('user');
@@ -60,7 +70,16 @@ const SellerDashboard = () => {
     });
   };
 
-  if (!user) return null;
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-green-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading seller dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
