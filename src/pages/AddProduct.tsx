@@ -9,6 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ArrowLeft, Plus } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useToast } from "@/hooks/use-toast";
+import { useProducts } from '@/contexts/ProductContext';
+import ImageUpload from '@/components/ImageUpload';
 
 const AddProduct = () => {
   const [user, setUser] = useState<any>(null);
@@ -17,11 +19,13 @@ const AddProduct = () => {
     description: '',
     price: '',
     quantity: '',
-    category: ''
+    category: '',
+    image: ''
   });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { addProduct } = useProducts();
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -43,20 +47,34 @@ const AddProduct = () => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const handleImageUpload = (imageUrl: string) => {
+    setFormData(prev => ({ ...prev, image: imageUrl }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     
-    // Simulate API call
-    setTimeout(() => {
-      toast({
-        title: "Product Added Successfully",
-        description: "Your product has been added to the marketplace.",
-      });
-      
-      setLoading(false);
-      navigate('/seller-dashboard');
-    }, 1500);
+    // Add product using context
+    addProduct({
+      name: formData.name,
+      description: formData.description,
+      price: parseFloat(formData.price),
+      quantity: parseInt(formData.quantity),
+      category: formData.category,
+      image: formData.image,
+      seller: user.name,
+      sellerId: user.email,
+      rating: 0
+    });
+
+    toast({
+      title: "Product Added Successfully",
+      description: "Your product has been added to the marketplace.",
+    });
+    
+    setLoading(false);
+    navigate('/seller-dashboard');
   };
 
   if (!user) return null;
@@ -162,17 +180,12 @@ const AddProduct = () => {
                   </div>
                 </div>
 
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                  <div className="text-gray-400 mb-2">
-                    <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
-                  </div>
-                  <p className="text-gray-600 mb-2">Product Image (Optional)</p>
-                  <p className="text-sm text-gray-500">Click to upload or drag and drop</p>
-                  <Button type="button" variant="outline" className="mt-2">
-                    Choose File
-                  </Button>
+                <div>
+                  <Label className="text-green-700">Product Image</Label>
+                  <ImageUpload 
+                    onImageUpload={handleImageUpload}
+                    currentImage={formData.image}
+                  />
                 </div>
 
                 <Button 

@@ -6,22 +6,18 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, User, ShoppingCart, Edit, Trash } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useToast } from "@/hooks/use-toast";
-
-interface Product {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  quantity: number;
-  category: string;
-  image?: string;
-}
+import { useProducts } from '@/contexts/ProductContext';
 
 const SellerDashboard = () => {
   const [user, setUser] = useState<any>(null);
-  const [products, setProducts] = useState<Product[]>([]);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { products, deleteProduct } = useProducts();
+
+  // Filter products to show only current seller's products
+  const userProducts = products.filter(product => 
+    user && (product.sellerId === user.email || product.seller === user.name)
+  );
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -37,27 +33,6 @@ const SellerDashboard = () => {
     }
     
     setUser(parsedUser);
-    
-    // Load sample products for demo
-    const sampleProducts: Product[] = [
-      {
-        id: '1',
-        name: 'Organic Fertilizer Premium',
-        description: 'High-quality organic fertilizer for vegetable gardens',
-        price: 25.99,
-        quantity: 50,
-        category: 'fertilizers'
-      },
-      {
-        id: '2',
-        name: 'Bio Pesticide Solution',
-        description: 'Eco-friendly pesticide for crop protection',
-        price: 18.50,
-        quantity: 30,
-        category: 'pesticides'
-      }
-    ];
-    setProducts(sampleProducts);
   }, [navigate]);
 
   const handleLogout = () => {
@@ -69,8 +44,8 @@ const SellerDashboard = () => {
     navigate('/');
   };
 
-  const deleteProduct = (productId: string) => {
-    setProducts(products.filter(p => p.id !== productId));
+  const handleDeleteProduct = (productId: string) => {
+    deleteProduct(productId);
     toast({
       title: "Product Deleted",
       description: "Product has been removed from your listing.",
@@ -107,7 +82,7 @@ const SellerDashboard = () => {
               <CardTitle className="text-sm font-medium text-gray-600">Total Products</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">{products.length}</div>
+              <div className="text-2xl font-bold text-green-600">{userProducts.length}</div>
             </CardContent>
           </Card>
           
@@ -134,7 +109,9 @@ const SellerDashboard = () => {
               <CardTitle className="text-sm font-medium text-gray-600">Low Stock Items</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-600">3</div>
+              <div className="text-2xl font-bold text-red-600">
+                {userProducts.filter(p => p.quantity < 10).length}
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -150,7 +127,7 @@ const SellerDashboard = () => {
           </Link>
         </div>
 
-        {products.length === 0 ? (
+        {userProducts.length === 0 ? (
           <Card className="text-center py-12">
             <CardContent>
               <div className="text-gray-400 mb-4">
@@ -168,12 +145,21 @@ const SellerDashboard = () => {
           </Card>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {products.map((product) => (
+            {userProducts.map((product) => (
               <Card key={product.id} className="hover:shadow-lg transition-shadow">
+                {product.image && (
+                  <div className="w-full h-48 overflow-hidden rounded-t-lg">
+                    <img 
+                      src={product.image} 
+                      alt={product.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
                 <CardHeader>
                   <div className="flex justify-between items-start">
-                    <Badge variant="secondary" className="mb-2">
-                      {product.category}
+                    <Badge variant="secondary" className="mb-2 capitalize">
+                      {product.category.replace('-', ' ')}
                     </Badge>
                     <div className="flex space-x-2">
                       <Button size="sm" variant="outline">
@@ -182,7 +168,7 @@ const SellerDashboard = () => {
                       <Button 
                         size="sm" 
                         variant="outline" 
-                        onClick={() => deleteProduct(product.id)}
+                        onClick={() => handleDeleteProduct(product.id)}
                         className="text-red-600 hover:text-red-700"
                       >
                         <Trash className="w-4 h-4" />

@@ -5,30 +5,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ShoppingCart, Search, Star, User } from 'lucide-react';
+import { Search, Star, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from "@/hooks/use-toast";
-
-interface Product {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  quantity: number;
-  category: string;
-  seller: string;
-  rating: number;
-  image?: string;
-}
+import { useProducts } from '@/contexts/ProductContext';
+import Cart from '@/components/Cart';
 
 const BuyerDashboard = () => {
   const [user, setUser] = useState<any>(null);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [cart, setCart] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { products, cart, addToCart, removeFromCart } = useProducts();
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -44,71 +33,6 @@ const BuyerDashboard = () => {
     }
     
     setUser(parsedUser);
-    
-    // Load sample products for demo
-    const sampleProducts: Product[] = [
-      {
-        id: '1',
-        name: 'Organic Fertilizer Premium',
-        description: 'High-quality organic fertilizer for vegetable gardens. Rich in nutrients and eco-friendly.',
-        price: 25.99,
-        quantity: 50,
-        category: 'fertilizers',
-        seller: 'Green Farm Co.',
-        rating: 4.5
-      },
-      {
-        id: '2',
-        name: 'Bio Pesticide Solution',
-        description: 'Eco-friendly pesticide for crop protection without harmful chemicals.',
-        price: 18.50,
-        quantity: 30,
-        category: 'pesticides',
-        seller: 'EcoAgri Solutions',
-        rating: 4.2
-      },
-      {
-        id: '3',
-        name: 'Premium Cattle Feed',
-        description: 'Nutritious cattle feed with essential vitamins and minerals.',
-        price: 45.00,
-        quantity: 25,
-        category: 'cow-food',
-        seller: 'LiveStock Plus',
-        rating: 4.8
-      },
-      {
-        id: '4',
-        name: 'NPK Fertilizer 20-20-20',
-        description: 'Balanced NPK fertilizer suitable for all types of crops.',
-        price: 32.75,
-        quantity: 40,
-        category: 'fertilizers',
-        seller: 'Crop Masters',
-        rating: 4.3
-      },
-      {
-        id: '5',
-        name: 'Fungicide Spray',
-        description: 'Effective fungicide for preventing plant diseases.',
-        price: 22.99,
-        quantity: 35,
-        category: 'pesticides',
-        seller: 'Plant Protection Co.',
-        rating: 4.1
-      },
-      {
-        id: '6',
-        name: 'Mineral Mix for Cattle',
-        description: 'Essential mineral supplement for healthy cattle growth.',
-        price: 28.50,
-        quantity: 20,
-        category: 'cow-food',
-        seller: 'Dairy Best',
-        rating: 4.6
-      }
-    ];
-    setProducts(sampleProducts);
   }, [navigate]);
 
   const handleLogout = () => {
@@ -120,12 +44,20 @@ const BuyerDashboard = () => {
     navigate('/');
   };
 
-  const addToCart = (productId: string) => {
-    setCart([...cart, productId]);
-    toast({
-      title: "Added to Cart",
-      description: "Product has been added to your cart.",
-    });
+  const handleCartAction = (productId: string) => {
+    if (cart.includes(productId)) {
+      removeFromCart(productId);
+      toast({
+        title: "Removed from Cart",
+        description: "Product has been removed from your cart.",
+      });
+    } else {
+      addToCart(productId);
+      toast({
+        title: "Added to Cart",
+        description: "Product has been added to your cart.",
+      });
+    }
   };
 
   const filteredProducts = products.filter(product => {
@@ -158,17 +90,7 @@ const BuyerDashboard = () => {
             <h1 className="text-xl font-bold text-blue-800">AgriMarket</h1>
           </div>
           <div className="flex items-center space-x-4">
-            <div className="relative">
-              <Button variant="outline" className="relative">
-                <ShoppingCart className="w-4 h-4 mr-2" />
-                Cart
-                {cart.length > 0 && (
-                  <Badge className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                    {cart.length}
-                  </Badge>
-                )}
-              </Button>
-            </div>
+            <Cart />
             <span className="text-sm text-gray-600">Welcome, {user.name}</span>
             <Button variant="outline" onClick={handleLogout}>
               Logout
@@ -209,14 +131,23 @@ const BuyerDashboard = () => {
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredProducts.map((product) => (
             <Card key={product.id} className="hover:shadow-lg transition-shadow">
+              {product.image && (
+                <div className="w-full h-48 overflow-hidden rounded-t-lg">
+                  <img 
+                    src={product.image} 
+                    alt={product.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
               <CardHeader>
                 <div className="flex justify-between items-start mb-2">
                   <Badge variant="secondary" className="capitalize">
                     {product.category.replace('-', ' ')}
                   </Badge>
                   <div className="flex items-center space-x-1">
-                    {renderStars(product.rating)}
-                    <span className="text-sm text-gray-600 ml-1">({product.rating})</span>
+                    {renderStars(product.rating || 0)}
+                    <span className="text-sm text-gray-600 ml-1">({product.rating || 0})</span>
                   </div>
                 </div>
                 <CardTitle className="text-lg">{product.name}</CardTitle>
@@ -237,11 +168,14 @@ const BuyerDashboard = () => {
                   </div>
                 </div>
                 <Button 
-                  onClick={() => addToCart(product.id)}
-                  className="w-full bg-blue-600 hover:bg-blue-700"
-                  disabled={cart.includes(product.id)}
+                  onClick={() => handleCartAction(product.id)}
+                  className={`w-full ${
+                    cart.includes(product.id) 
+                      ? 'bg-red-600 hover:bg-red-700' 
+                      : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
                 >
-                  {cart.includes(product.id) ? 'Added to Cart' : 'Add to Cart'}
+                  {cart.includes(product.id) ? 'Remove from Cart' : 'Add to Cart'}
                 </Button>
               </CardContent>
             </Card>
