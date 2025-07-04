@@ -7,8 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useProducts } from '@/contexts/ProductContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from "@/hooks/use-toast";
-import { CreditCard, MapPin, Clock, Smartphone, Building } from 'lucide-react';
+import { CreditCard, MapPin, Clock } from 'lucide-react';
 
 interface CheckoutProps {
   onClose: () => void;
@@ -16,6 +17,7 @@ interface CheckoutProps {
 
 const Checkout: React.FC<CheckoutProps> = ({ onClose }) => {
   const { products, cart, placeOrder } = useProducts();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [paymentMethod, setPaymentMethod] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
@@ -32,15 +34,14 @@ const Checkout: React.FC<CheckoutProps> = ({ onClose }) => {
 
   useEffect(() => {
     // Pre-fill delivery address from user profile if available
-    const userData = localStorage.getItem('user');
-    if (userData) {
-      const user = JSON.parse(userData);
-      if (user.address) {
-        const fullAddress = `${user.address}, ${user.city}, ${user.state} - ${user.zipCode}`.replace(/,\s*,/g, ',').replace(/^,\s*|,\s*$/g, '');
+    if (user?.user_metadata) {
+      const metadata = user.user_metadata;
+      if (metadata.address || metadata.city || metadata.state || metadata.zipCode) {
+        const fullAddress = `${metadata.address || ''}, ${metadata.city || ''}, ${metadata.state || ''} - ${metadata.zipCode || ''}`.replace(/,\s*,/g, ',').replace(/^,\s*|,\s*$/g, '');
         setDeliveryAddress(fullAddress);
       }
     }
-  }, []);
+  }, [user]);
 
   const cartItems = cart.map(cartItem => {
     const product = products.find(p => p.id === cartItem.productId);
@@ -117,20 +118,16 @@ const Checkout: React.FC<CheckoutProps> = ({ onClose }) => {
       return;
     }
 
-    setIsSubmitting(true);
-
-    const userData = localStorage.getItem('user');
-    if (!userData) {
+    if (!user) {
       toast({
         title: "Error",
         description: "Please log in to place an order.",
         variant: "destructive"
       });
-      setIsSubmitting(false);
       return;
     }
 
-    const user = JSON.parse(userData);
+    setIsSubmitting(true);
 
     try {
       const orderProducts = cartItems.map(item => ({
@@ -143,9 +140,9 @@ const Checkout: React.FC<CheckoutProps> = ({ onClose }) => {
       }));
 
       await placeOrder({
-        buyerId: user.email,
-        buyerName: user.name,
-        buyerEmail: user.email,
+        buyerId: user.id,
+        buyerName: user.user_metadata?.name || user.email || 'Unknown',
+        buyerEmail: user.email || '',
         products: orderProducts,
         totalAmount: total,
         paymentMethod,
@@ -153,18 +150,9 @@ const Checkout: React.FC<CheckoutProps> = ({ onClose }) => {
         deliveryTime: "Within 1 hour"
       });
 
-      toast({
-        title: "Order Placed Successfully!",
-        description: "Your order will be delivered within 1 hour.",
-      });
-
       onClose();
     } catch (error) {
-      toast({
-        title: "Order Failed",
-        description: "There was an error placing your order. Please try again.",
-        variant: "destructive"
-      });
+      console.error('Order placement error:', error);
     } finally {
       setIsSubmitting(false);
     }

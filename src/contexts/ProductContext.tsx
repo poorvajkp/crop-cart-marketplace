@@ -12,6 +12,7 @@ export interface Product {
   quantity: number;
   category: string;
   seller: string;
+  sellerId?: string;
   rating: number;
   image?: string;
 }
@@ -21,9 +22,44 @@ interface CartItem {
   quantity: number;
 }
 
+interface OrderProduct {
+  productId: string;
+  productName: string;
+  quantity: number;
+  price: number;
+  seller: string;
+  sellerId?: string;
+}
+
+interface Order {
+  id: string;
+  buyerId: string;
+  buyerName: string;
+  buyerEmail: string;
+  products: OrderProduct[];
+  totalAmount: number;
+  paymentMethod: string;
+  deliveryAddress: string;
+  deliveryTime: string;
+  orderDate: string;
+  status: 'pending' | 'confirmed' | 'delivered' | 'cancelled';
+}
+
+interface PlaceOrderData {
+  buyerId: string;
+  buyerName: string;
+  buyerEmail: string;
+  products: OrderProduct[];
+  totalAmount: number;
+  paymentMethod: string;
+  deliveryAddress: string;
+  deliveryTime: string;
+}
+
 interface ProductContextType {
   products: Product[];
   cart: CartItem[];
+  orders: Order[];
   loading: boolean;
   addToCart: (productId: string) => Promise<void>;
   removeFromCart: (productId: string) => Promise<void>;
@@ -31,6 +67,11 @@ interface ProductContextType {
   clearCart: () => Promise<void>;
   fetchProducts: () => Promise<void>;
   fetchCart: () => Promise<void>;
+  addProduct: (product: Omit<Product, 'id'>) => Promise<void>;
+  deleteProduct: (productId: string) => Promise<void>;
+  placeOrder: (orderData: PlaceOrderData) => Promise<void>;
+  updateOrderStatus: (orderId: string, status: Order['status']) => Promise<void>;
+  fetchOrders: () => Promise<void>;
 }
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
@@ -46,6 +87,7 @@ export const useProducts = () => {
 export const ProductProvider = ({ children }: { children: React.ReactNode }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
   const { toast } = useToast();
@@ -63,11 +105,12 @@ export const ProductProvider = ({ children }: { children: React.ReactNode }) => 
         id: product.id,
         name: product.name,
         description: product.description || '',
-        price: parseFloat(product.price),
+        price: parseFloat(product.price.toString()),
         quantity: product.quantity,
         category: product.category,
         seller: product.seller_name || 'Unknown Seller',
-        rating: parseFloat(product.rating || '0'),
+        sellerId: product.seller_id,
+        rating: parseFloat((product.rating || '0').toString()),
         image: product.image_url || undefined
       }));
 
@@ -106,6 +149,196 @@ export const ProductProvider = ({ children }: { children: React.ReactNode }) => 
       setCart(cartItems);
     } catch (error) {
       console.error('Error fetching cart:', error);
+    }
+  };
+
+  const fetchOrders = async () => {
+    if (!user) {
+      setOrders([]);
+      return;
+    }
+
+    try {
+      const { data: ordersData, error: ordersError } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          order_items (
+            product_id,
+            product_name,
+            quantity,
+            price,
+            seller_id,
+            seller_name
+          )
+        `)
+        .or(`user_id.eq.${user.id},order_items.seller_id.eq.${user.id}`)
+        .order('created_at', { ascending: false });
+
+      if (ordersError) throw ordersError;
+
+      const mappedOrders: Order[] = (ordersData || []).map(order => ({
+        id: order.id,
+        buyerId: order.user_id,
+        buyerName: order.buyer_name || '',
+        buyerEmail: order.buyer_email || '',
+        products: order.order_items.map((item: any) => ({
+          productId: item.product_id,
+          productName: item.product_name,
+          quantity: item.quantity,
+          price: parseFloat(item.price.toString()),
+          seller: item.seller_name || '',
+          sellerId: item.seller_id
+        })),
+        totalAmount: parseFloat(order.total_amount.toString()),
+        paymentMethod: order.payment_method,
+        deliveryAddress: order.delivery_address,
+        deliveryTime: order.delivery_time || '',
+        orderDate: order.created_at,
+        status: order.status as Order['status']
+      }));
+
+      setOrders(mappedOrders);
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+    }
+  };
+
+  const addProduct = async (product: Omit<Product, 'id'>) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('products')
+        .insert({
+          name: product.name,
+          description: product.description,
+          price: product.price,
+          quantity: product.quantity,
+          category: product.category,
+          seller_id: user.id,
+          seller_name: product.seller,
+          rating: product.rating,
+          image_url: product.image
+        });
+
+      if (error) throw error;
+
+      await fetchProducts();
+      toast({
+        title: "Success",
+        description: "Product added successfully",
+      });
+    } catch (error) {
+      console.error('Error adding product:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add product",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const deleteProduct = async (productId: string) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', productId)
+        .eq('seller_id', user.id);
+
+      if (error) throw error;
+
+      await fetchProducts();
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete product",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const placeOrder = async (orderData: PlaceOrderData) => {
+    if (!user) return;
+
+    try {
+      // Create order
+      const { data: orderResult, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          user_id: user.id,
+          buyer_name: orderData.buyerName,
+          buyer_email: orderData.buyerEmail,
+          total_amount: orderData.totalAmount,
+          payment_method: orderData.paymentMethod,
+          delivery_address: orderData.deliveryAddress,
+          delivery_time: orderData.deliveryTime,
+          status: 'pending'
+        })
+        .select()
+        .single();
+
+      if (orderError) throw orderError;
+
+      // Create order items
+      const orderItems = orderData.products.map(product => ({
+        order_id: orderResult.id,
+        product_id: product.productId,
+        product_name: product.productName,
+        quantity: product.quantity,
+        price: product.price,
+        seller_id: product.sellerId,
+        seller_name: product.seller
+      }));
+
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .insert(orderItems);
+
+      if (itemsError) throw itemsError;
+
+      // Clear cart after successful order
+      await clearCart();
+      await fetchOrders();
+
+      toast({
+        title: "Order Placed Successfully",
+        description: "Your order has been placed and will be processed soon.",
+      });
+    } catch (error) {
+      console.error('Error placing order:', error);
+      toast({
+        title: "Error",
+        description: "Failed to place order",
+        variant: "destructive"
+      });
+      throw error;
+    }
+  };
+
+  const updateOrderStatus = async (orderId: string, status: Order['status']) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ status })
+        .eq('id', orderId);
+
+      if (error) throw error;
+
+      await fetchOrders();
+    } catch (error) {
+      console.error('Error updating order status:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update order status",
+        variant: "destructive"
+      });
     }
   };
 
@@ -223,8 +456,10 @@ export const ProductProvider = ({ children }: { children: React.ReactNode }) => 
   useEffect(() => {
     if (user) {
       fetchCart();
+      fetchOrders();
     } else {
       setCart([]);
+      setOrders([]);
     }
   }, [user]);
 
@@ -232,13 +467,19 @@ export const ProductProvider = ({ children }: { children: React.ReactNode }) => 
     <ProductContext.Provider value={{
       products,
       cart,
+      orders,
       loading,
       addToCart,
       removeFromCart,
       updateCartQuantity,
       clearCart,
       fetchProducts,
-      fetchCart
+      fetchCart,
+      addProduct,
+      deleteProduct,
+      placeOrder,
+      updateOrderStatus,
+      fetchOrders
     }}>
       {children}
     </ProductContext.Provider>
