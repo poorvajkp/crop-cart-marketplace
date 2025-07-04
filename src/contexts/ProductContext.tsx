@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
@@ -331,17 +332,31 @@ export const ProductProvider = ({ children }: { children: React.ReactNode }) => 
       // Update product quantities (deduct inventory)
       const inventoryUpdates = await Promise.all(
         orderData.products.map(async (product) => {
-          const { error } = await supabase
+          // Get current quantity first
+          const { data: currentProduct, error: fetchError } = await supabase
             .from('products')
-            .update({ 
-              quantity: supabase.raw(`quantity - ${product.quantity}`)
-            })
+            .select('quantity')
             .eq('id', product.productId)
-            .gte('quantity', product.quantity); // Ensure we don't go negative
+            .single();
 
-          if (error) {
-            console.error(`Failed to update inventory for product ${product.productId}:`, error);
-            throw error;
+          if (fetchError) throw fetchError;
+
+          const newQuantity = currentProduct.quantity - product.quantity;
+          
+          // Ensure we don't go negative
+          if (newQuantity < 0) {
+            throw new Error(`Insufficient stock for product ${product.productId}`);
+          }
+
+          // Update with the new quantity
+          const { error: updateError } = await supabase
+            .from('products')
+            .update({ quantity: newQuantity })
+            .eq('id', product.productId);
+
+          if (updateError) {
+            console.error(`Failed to update inventory for product ${product.productId}:`, updateError);
+            throw updateError;
           }
 
           return product.productId;
