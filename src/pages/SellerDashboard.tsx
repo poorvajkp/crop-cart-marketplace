@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,13 +18,13 @@ const SellerDashboard = () => {
 
   // Filter products to show only current seller's products
   const userProducts = products.filter(product => 
-    user && (product.seller_id === user.id || product.seller === user.user_metadata?.name)
+    user && (product.sellerId === user.id || product.seller === user.user_metadata?.name)
   );
 
   // Filter orders that contain current seller's products
   const receivedOrders = orders.filter(order => 
     order.products.some(product => 
-      product.seller_id === user?.id || product.seller === user?.user_metadata?.name
+      product.sellerId === user?.id || product.seller === user?.user_metadata?.name
     )
   );
 
@@ -120,7 +119,7 @@ const SellerDashboard = () => {
               <div className="text-2xl font-bold text-purple-600">
                 ${receivedOrders.reduce((total, order) => {
                   const myProducts = order.products.filter(product => 
-                    product.seller_id === user?.id || product.seller === user?.user_metadata?.name
+                    product.sellerId === user?.id || product.seller === user?.user_metadata?.name
                   );
                   return total + myProducts.reduce((sum, product) => sum + (product.price * product.quantity), 0);
                 }, 0).toFixed(2)}
