@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
@@ -159,7 +158,10 @@ export const ProductProvider = ({ children }: { children: React.ReactNode }) => 
     }
 
     try {
-      const { data: ordersData, error: ordersError } = await supabase
+      console.log('Fetching orders for user:', user.id);
+      
+      // First, get orders where user is the buyer
+      const { data: buyerOrders, error: buyerError } = await supabase
         .from('orders')
         .select(`
           *,
@@ -172,12 +174,43 @@ export const ProductProvider = ({ children }: { children: React.ReactNode }) => 
             seller_name
           )
         `)
-        .or(`user_id.eq.${user.id},order_items.seller_id.eq.${user.id}`)
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (ordersError) throw ordersError;
+      if (buyerError) {
+        console.error('Error fetching buyer orders:', buyerError);
+        throw buyerError;
+      }
 
-      const mappedOrders: Order[] = (ordersData || []).map(order => ({
+      // Then, get orders that contain products from current seller
+      const { data: sellerOrders, error: sellerError } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          order_items!inner (
+            product_id,
+            product_name,
+            quantity,
+            price,
+            seller_id,
+            seller_name
+          )
+        `)
+        .eq('order_items.seller_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (sellerError) {
+        console.error('Error fetching seller orders:', sellerError);
+        // Don't throw here, just log the error as seller might not have orders
+      }
+
+      // Combine and deduplicate orders
+      const allOrders = [...(buyerOrders || []), ...(sellerOrders || [])];
+      const uniqueOrders = allOrders.filter((order, index, self) => 
+        index === self.findIndex(o => o.id === order.id)
+      );
+
+      const mappedOrders: Order[] = uniqueOrders.map(order => ({
         id: order.id,
         buyerId: order.user_id,
         buyerName: order.buyer_name || '',
@@ -198,9 +231,15 @@ export const ProductProvider = ({ children }: { children: React.ReactNode }) => 
         status: order.status as Order['status']
       }));
 
+      console.log('Mapped orders:', mappedOrders);
       setOrders(mappedOrders);
     } catch (error) {
       console.error('Error fetching orders:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch orders",
+        variant: "destructive"
+      });
     }
   };
 
@@ -263,11 +302,14 @@ export const ProductProvider = ({ children }: { children: React.ReactNode }) => 
   };
 
   const placeOrder = async (orderData: PlaceOrderData) => {
-    if (!user) return;
+    if (!user) {
+      console.error('No user found for order placement');
+      throw new Error('User not authenticated');
+    }
 
     try {
-      // Start a transaction-like operation
       console.log('Starting order placement process...');
+      console.log('Order data:', orderData);
 
       // Check inventory before placing order
       const inventoryChecks = await Promise.all(
@@ -278,7 +320,10 @@ export const ProductProvider = ({ children }: { children: React.ReactNode }) => 
             .eq('id', product.productId)
             .single();
 
-          if (error) throw error;
+          if (error) {
+            console.error(`Error checking inventory for ${product.productId}:`, error);
+            throw error;
+          }
           
           if (data.quantity < product.quantity) {
             throw new Error(`Insufficient stock for ${product.productName}. Available: ${data.quantity}, Requested: ${product.quantity}`);
@@ -306,7 +351,10 @@ export const ProductProvider = ({ children }: { children: React.ReactNode }) => 
         .select()
         .single();
 
-      if (orderError) throw orderError;
+      if (orderError) {
+        console.error('Error creating order:', orderError);
+        throw orderError;
+      }
 
       console.log('Order created:', orderResult);
 
@@ -325,25 +373,30 @@ export const ProductProvider = ({ children }: { children: React.ReactNode }) => 
         .from('order_items')
         .insert(orderItems);
 
-      if (itemsError) throw itemsError;
+      if (itemsError) {
+        console.error('Error creating order items:', itemsError);
+        throw itemsError;
+      }
 
       console.log('Order items created');
 
       // Update product quantities (deduct inventory)
       const inventoryUpdates = await Promise.all(
         orderData.products.map(async (product) => {
-          // Get current quantity first
+          // Get current quantity
           const { data: currentProduct, error: fetchError } = await supabase
             .from('products')
             .select('quantity')
             .eq('id', product.productId)
             .single();
 
-          if (fetchError) throw fetchError;
+          if (fetchError) {
+            console.error(`Failed to fetch current quantity for ${product.productId}:`, fetchError);
+            throw fetchError;
+          }
 
           const newQuantity = currentProduct.quantity - product.quantity;
           
-          // Ensure we don't go negative
           if (newQuantity < 0) {
             throw new Error(`Insufficient stock for product ${product.productId}`);
           }
@@ -359,6 +412,7 @@ export const ProductProvider = ({ children }: { children: React.ReactNode }) => 
             throw updateError;
           }
 
+          console.log(`Updated inventory for ${product.productId}: ${currentProduct.quantity} -> ${newQuantity}`);
           return product.productId;
         })
       );
@@ -374,14 +428,15 @@ export const ProductProvider = ({ children }: { children: React.ReactNode }) => 
       console.log('Order placement completed successfully');
 
       toast({
-        title: "Order Placed Successfully",
-        description: "Your order has been placed and inventory has been updated.",
+        title: "Order Placed Successfully!",
+        description: "Your order has been placed and will be processed shortly.",
       });
+
     } catch (error) {
       console.error('Error placing order:', error);
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to place order",
+        title: "Order Failed",
+        description: error instanceof Error ? error.message : "Failed to place order. Please try again.",
         variant: "destructive"
       });
       throw error;

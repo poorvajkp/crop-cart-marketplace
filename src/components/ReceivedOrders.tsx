@@ -5,23 +5,29 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useProducts } from '@/contexts/ProductContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from "@/hooks/use-toast";
 import { Package, Clock, CheckCircle, XCircle, User } from 'lucide-react';
 
 const ReceivedOrders = () => {
   const { orders, updateOrderStatus } = useProducts();
+  const { user } = useAuth();
   const { toast } = useToast();
   
-  // Get current user
-  const userData = localStorage.getItem('user');
-  const user = userData ? JSON.parse(userData) : null;
+  console.log('ReceivedOrders - Current user:', user?.id);
+  console.log('ReceivedOrders - All orders:', orders);
   
   // Filter orders that contain products from current seller
-  const myReceivedOrders = orders.filter(order => 
-    order.products.some(product => 
-      product.sellerId === user?.email || product.seller === user?.name
-    )
-  );
+  const myReceivedOrders = orders.filter(order => {
+    const hasMyProducts = order.products.some(product => {
+      console.log('Checking product seller:', product.sellerId, 'vs user:', user?.id);
+      return product.sellerId === user?.id;
+    });
+    console.log('Order', order.id, 'has my products:', hasMyProducts);
+    return hasMyProducts;
+  });
+
+  console.log('My received orders:', myReceivedOrders);
 
   const handleStatusUpdate = (orderId: string, newStatus: string) => {
     updateOrderStatus(orderId, newStatus as any);
@@ -69,7 +75,7 @@ const ReceivedOrders = () => {
         {myReceivedOrders.map((order) => {
           // Filter products that belong to current seller
           const myProducts = order.products.filter(product => 
-            product.sellerId === user?.email || product.seller === user?.name
+            product.sellerId === user?.id
           );
           const myOrderTotal = myProducts.reduce((sum, product) => sum + (product.price * product.quantity), 0);
           
