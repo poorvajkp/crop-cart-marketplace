@@ -160,7 +160,7 @@ export const ProductProvider = ({ children }: { children: React.ReactNode }) => 
     try {
       console.log('Fetching orders for user:', user.id);
       
-      // First, get orders where user is the buyer
+      // Get orders where user is the buyer
       const { data: buyerOrders, error: buyerError } = await supabase
         .from('orders')
         .select(`
@@ -182,30 +182,60 @@ export const ProductProvider = ({ children }: { children: React.ReactNode }) => 
         throw buyerError;
       }
 
-      // Then, get orders that contain products from current seller
-      const { data: sellerOrders, error: sellerError } = await supabase
-        .from('orders')
+      // Get orders that contain products from current seller
+      const { data: sellerOrderItems, error: sellerError } = await supabase
+        .from('order_items')
         .select(`
-          *,
-          order_items!inner (
-            product_id,
-            product_name,
-            quantity,
-            price,
-            seller_id,
-            seller_name
+          order_id,
+          orders!inner (
+            id,
+            user_id,
+            buyer_name,
+            buyer_email,
+            total_amount,
+            payment_method,
+            delivery_address,
+            delivery_time,
+            status,
+            created_at
           )
         `)
-        .eq('order_items.seller_id', user.id)
-        .order('created_at', { ascending: false });
+        .eq('seller_id', user.id);
 
       if (sellerError) {
         console.error('Error fetching seller orders:', sellerError);
-        // Don't throw here, just log the error as seller might not have orders
+      }
+
+      // Get full order details for seller orders
+      const sellerOrderIds = sellerOrderItems?.map(item => item.order_id) || [];
+      let sellerOrders: any[] = [];
+      
+      if (sellerOrderIds.length > 0) {
+        const { data: sellerOrdersData, error: sellerOrdersError } = await supabase
+          .from('orders')
+          .select(`
+            *,
+            order_items (
+              product_id,
+              product_name,
+              quantity,
+              price,
+              seller_id,
+              seller_name
+            )
+          `)
+          .in('id', sellerOrderIds)
+          .order('created_at', { ascending: false });
+
+        if (sellerOrdersError) {
+          console.error('Error fetching seller order details:', sellerOrdersError);
+        } else {
+          sellerOrders = sellerOrdersData || [];
+        }
       }
 
       // Combine and deduplicate orders
-      const allOrders = [...(buyerOrders || []), ...(sellerOrders || [])];
+      const allOrders = [...(buyerOrders || []), ...sellerOrders];
       const uniqueOrders = allOrders.filter((order, index, self) => 
         index === self.findIndex(o => o.id === order.id)
       );
@@ -380,44 +410,22 @@ export const ProductProvider = ({ children }: { children: React.ReactNode }) => 
 
       console.log('Order items created');
 
-      // Update product quantities (deduct inventory)
-      const inventoryUpdates = await Promise.all(
-        orderData.products.map(async (product) => {
-          // Get current quantity
-          const { data: currentProduct, error: fetchError } = await supabase
-            .from('products')
-            .select('quantity')
-            .eq('id', product.productId)
-            .single();
+      // Update product quantities using RPC function for atomic updates
+      for (const product of orderData.products) {
+        console.log(`Updating inventory for product ${product.productId}: reducing by ${product.quantity}`);
+        
+        const { error: updateError } = await supabase.rpc('reduce_product_quantity', {
+          product_id: product.productId,
+          quantity_to_reduce: product.quantity
+        });
 
-          if (fetchError) {
-            console.error(`Failed to fetch current quantity for ${product.productId}:`, fetchError);
-            throw fetchError;
-          }
+        if (updateError) {
+          console.error(`Failed to update inventory for product ${product.productId}:`, updateError);
+          throw new Error(`Failed to update inventory for ${product.productName}: ${updateError.message}`);
+        }
+      }
 
-          const newQuantity = currentProduct.quantity - product.quantity;
-          
-          if (newQuantity < 0) {
-            throw new Error(`Insufficient stock for product ${product.productId}`);
-          }
-
-          // Update with the new quantity
-          const { error: updateError } = await supabase
-            .from('products')
-            .update({ quantity: newQuantity })
-            .eq('id', product.productId);
-
-          if (updateError) {
-            console.error(`Failed to update inventory for product ${product.productId}:`, updateError);
-            throw updateError;
-          }
-
-          console.log(`Updated inventory for ${product.productId}: ${currentProduct.quantity} -> ${newQuantity}`);
-          return product.productId;
-        })
-      );
-
-      console.log('Inventory updated for products:', inventoryUpdates);
+      console.log('Inventory updated successfully');
 
       // Clear cart after successful order
       await clearCart();
@@ -427,18 +435,8 @@ export const ProductProvider = ({ children }: { children: React.ReactNode }) => 
 
       console.log('Order placement completed successfully');
 
-      toast({
-        title: "Order Placed Successfully!",
-        description: "Your order has been placed and will be processed shortly.",
-      });
-
     } catch (error) {
       console.error('Error placing order:', error);
-      toast({
-        title: "Order Failed",
-        description: error instanceof Error ? error.message : "Failed to place order. Please try again.",
-        variant: "destructive"
-      });
       throw error;
     }
   };
