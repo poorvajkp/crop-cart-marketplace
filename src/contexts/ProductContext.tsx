@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
@@ -266,6 +265,30 @@ export const ProductProvider = ({ children }: { children: React.ReactNode }) => 
     if (!user) return;
 
     try {
+      // Start a transaction-like operation
+      console.log('Starting order placement process...');
+
+      // Check inventory before placing order
+      const inventoryChecks = await Promise.all(
+        orderData.products.map(async (product) => {
+          const { data, error } = await supabase
+            .from('products')
+            .select('quantity')
+            .eq('id', product.productId)
+            .single();
+
+          if (error) throw error;
+          
+          if (data.quantity < product.quantity) {
+            throw new Error(`Insufficient stock for ${product.productName}. Available: ${data.quantity}, Requested: ${product.quantity}`);
+          }
+          
+          return { productId: product.productId, availableQuantity: data.quantity };
+        })
+      );
+
+      console.log('Inventory checks passed:', inventoryChecks);
+
       // Create order
       const { data: orderResult, error: orderError } = await supabase
         .from('orders')
@@ -284,6 +307,8 @@ export const ProductProvider = ({ children }: { children: React.ReactNode }) => 
 
       if (orderError) throw orderError;
 
+      console.log('Order created:', orderResult);
+
       // Create order items
       const orderItems = orderData.products.map(product => ({
         order_id: orderResult.id,
@@ -301,19 +326,47 @@ export const ProductProvider = ({ children }: { children: React.ReactNode }) => 
 
       if (itemsError) throw itemsError;
 
+      console.log('Order items created');
+
+      // Update product quantities (deduct inventory)
+      const inventoryUpdates = await Promise.all(
+        orderData.products.map(async (product) => {
+          const { error } = await supabase
+            .from('products')
+            .update({ 
+              quantity: supabase.raw(`quantity - ${product.quantity}`)
+            })
+            .eq('id', product.productId)
+            .gte('quantity', product.quantity); // Ensure we don't go negative
+
+          if (error) {
+            console.error(`Failed to update inventory for product ${product.productId}:`, error);
+            throw error;
+          }
+
+          return product.productId;
+        })
+      );
+
+      console.log('Inventory updated for products:', inventoryUpdates);
+
       // Clear cart after successful order
       await clearCart();
-      await fetchOrders();
+      
+      // Refresh data
+      await Promise.all([fetchOrders(), fetchProducts()]);
+
+      console.log('Order placement completed successfully');
 
       toast({
         title: "Order Placed Successfully",
-        description: "Your order has been placed and will be processed soon.",
+        description: "Your order has been placed and inventory has been updated.",
       });
     } catch (error) {
       console.error('Error placing order:', error);
       toast({
         title: "Error",
-        description: "Failed to place order",
+        description: error instanceof Error ? error.message : "Failed to place order",
         variant: "destructive"
       });
       throw error;

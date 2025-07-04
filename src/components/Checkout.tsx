@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -102,6 +101,20 @@ const Checkout: React.FC<CheckoutProps> = ({ onClose }) => {
     return true;
   };
 
+  const validateInventory = () => {
+    for (const item of cartItems) {
+      if (item!.cartQuantity > item!.quantity) {
+        toast({
+          title: "Insufficient Stock",
+          description: `Only ${item!.quantity} units of "${item!.name}" are available. Please reduce your quantity.`,
+          variant: "destructive"
+        });
+        return false;
+      }
+    }
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -115,6 +128,10 @@ const Checkout: React.FC<CheckoutProps> = ({ onClose }) => {
     }
 
     if (!validatePaymentMethod()) {
+      return;
+    }
+
+    if (!validateInventory()) {
       return;
     }
 
@@ -150,9 +167,19 @@ const Checkout: React.FC<CheckoutProps> = ({ onClose }) => {
         deliveryTime: "Within 1 hour"
       });
 
+      toast({
+        title: "Order Placed Successfully!",
+        description: "Your order has been placed and inventory has been updated. You will receive a confirmation shortly.",
+      });
+
       onClose();
     } catch (error) {
       console.error('Order placement error:', error);
+      toast({
+        title: "Order Failed",
+        description: "There was an error placing your order. Please try again.",
+        variant: "destructive"
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -277,7 +304,16 @@ const Checkout: React.FC<CheckoutProps> = ({ onClose }) => {
             {cartItems.map((item) => (
               <div key={item!.id} className="flex justify-between text-sm">
                 <span>{item!.name} x {item!.cartQuantity}</span>
-                <span>${(item!.price * item!.cartQuantity).toFixed(2)}</span>
+                <div className="text-right">
+                  <div>${(item!.price * item!.cartQuantity).toFixed(2)}</div>
+                  <div className="text-xs text-gray-500">
+                    {item!.quantity < item!.cartQuantity ? (
+                      <span className="text-red-500">Only {item!.quantity} in stock!</span>
+                    ) : (
+                      <span>{item!.quantity} available</span>
+                    )}
+                  </div>
+                </div>
               </div>
             ))}
           </div>
