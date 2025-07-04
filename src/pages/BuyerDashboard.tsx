@@ -1,63 +1,48 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, Star, User, Package } from 'lucide-react';
+import { Search, Star } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from "@/hooks/use-toast";
 import { useProducts } from '@/contexts/ProductContext';
+import { useAuth } from '@/contexts/AuthContext';
 import Cart from '@/components/Cart';
 import Orders from '@/components/Orders';
 import UserProfile from '@/components/UserProfile';
 
 const BuyerDashboard = () => {
-  const [user, setUser] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { products, cart, addToCart, removeFromCart } = useProducts();
+  const { products, cart, addToCart, removeFromCart, loading } = useProducts();
+  const { user, signOut } = useAuth();
 
-  useEffect(() => {
-    const userData = localStorage.getItem('user');
-    if (!userData) {
-      toast({
-        title: "Access Denied",
-        description: "Please log in to access the buyer dashboard.",
-        variant: "destructive"
-      });
-      navigate('/login');
+  React.useEffect(() => {
+    if (!user) {
+      navigate('/auth');
       return;
     }
     
-    const parsedUser = JSON.parse(userData);
-    if (parsedUser.role !== 'buyer') {
-      toast({
-        title: "Access Denied",
-        description: "This dashboard is for buyers only. Redirecting to seller dashboard...",
-        variant: "destructive"
-      });
+    // Check if user role is buyer
+    const userRole = user.user_metadata?.role;
+    if (userRole === 'seller') {
       navigate('/seller-dashboard');
       return;
     }
-    
-    setUser(parsedUser);
-  }, [navigate, toast]);
+  }, [user, navigate]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('user');
-    toast({
-      title: "Logged Out",
-      description: "You have been successfully logged out.",
-    });
+  const handleLogout = async () => {
+    await signOut();
     navigate('/');
   };
 
-  const handleCartAction = (productId: string) => {
+  const handleCartAction = async (productId: string) => {
     const product = products.find(p => p.id === productId);
     if (!product) return;
 
@@ -71,13 +56,13 @@ const BuyerDashboard = () => {
     }
 
     if (cart.some(item => item.productId === productId)) {
-      removeFromCart(productId);
+      await removeFromCart(productId);
       toast({
         title: "Removed from Cart",
         description: "Product has been removed from your cart.",
       });
     } else {
-      addToCart(productId);
+      await addToCart(productId);
       toast({
         title: "Added to Cart",
         description: "Product has been added to your cart.",
@@ -106,7 +91,7 @@ const BuyerDashboard = () => {
     return text.substring(0, maxLength) + '...';
   };
 
-  if (!user) {
+  if (!user || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
