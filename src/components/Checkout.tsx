@@ -32,6 +32,11 @@ const Checkout: React.FC<CheckoutProps> = ({ onClose }) => {
   const [ifscCode, setIfscCode] = useState('');
 
   useEffect(() => {
+    console.log('Checkout component mounted');
+    console.log('User:', user);
+    console.log('Cart:', cart);
+    console.log('Products:', products);
+    
     // Pre-fill delivery address from user profile if available
     if (user?.user_metadata) {
       const metadata = user.user_metadata;
@@ -40,7 +45,7 @@ const Checkout: React.FC<CheckoutProps> = ({ onClose }) => {
         setDeliveryAddress(fullAddress);
       }
     }
-  }, [user]);
+  }, [user, cart, products]);
 
   const cartItems = cart.map(cartItem => {
     const product = products.find(p => p.id === cartItem.productId);
@@ -118,6 +123,22 @@ const Checkout: React.FC<CheckoutProps> = ({ onClose }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log('Order submission started');
+    console.log('Payment method:', paymentMethod);
+    console.log('Delivery address:', deliveryAddress);
+    console.log('User:', user);
+    console.log('Cart items:', cartItems);
+
+    if (!user) {
+      console.error('No user found');
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to place an order.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     if (!paymentMethod || !deliveryAddress) {
       toast({
         title: "Missing Information",
@@ -135,10 +156,10 @@ const Checkout: React.FC<CheckoutProps> = ({ onClose }) => {
       return;
     }
 
-    if (!user) {
+    if (cartItems.length === 0) {
       toast({
-        title: "Error",
-        description: "Please log in to place an order.",
+        title: "Empty Cart",
+        description: "Please add items to your cart before placing an order.",
         variant: "destructive"
       });
       return;
@@ -147,6 +168,8 @@ const Checkout: React.FC<CheckoutProps> = ({ onClose }) => {
     setIsSubmitting(true);
 
     try {
+      console.log('Preparing order data...');
+      
       const orderProducts = cartItems.map(item => ({
         productId: item!.id,
         productName: item!.name,
@@ -156,7 +179,9 @@ const Checkout: React.FC<CheckoutProps> = ({ onClose }) => {
         sellerId: item!.sellerId
       }));
 
-      await placeOrder({
+      console.log('Order products:', orderProducts);
+
+      const orderData = {
         buyerId: user.id,
         buyerName: user.user_metadata?.name || user.email || 'Unknown',
         buyerEmail: user.email || '',
@@ -165,7 +190,13 @@ const Checkout: React.FC<CheckoutProps> = ({ onClose }) => {
         paymentMethod,
         deliveryAddress,
         deliveryTime: "Within 1 hour"
-      });
+      };
+
+      console.log('Final order data:', orderData);
+
+      await placeOrder(orderData);
+
+      console.log('Order placed successfully');
 
       toast({
         title: "Order Placed Successfully!",
@@ -177,7 +208,7 @@ const Checkout: React.FC<CheckoutProps> = ({ onClose }) => {
       console.error('Order placement error:', error);
       toast({
         title: "Order Failed",
-        description: "There was an error placing your order. Please try again.",
+        description: error instanceof Error ? error.message : "There was an error placing your order. Please try again.",
         variant: "destructive"
       });
     } finally {
