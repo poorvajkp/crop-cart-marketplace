@@ -39,7 +39,6 @@ const BuyerDashboard = () => {
 
   const handleLogout = async () => {
     await signOut();
-    navigate('/');
   };
 
   const handleCartAction = async (productId: string) => {
@@ -114,6 +113,7 @@ const BuyerDashboard = () => {
             <h1 className="text-xl font-bold text-blue-800">AgriMarket</h1>
           </div>
           <div className="flex items-center space-x-4">
+            <span className="text-sm text-gray-600">Welcome, {user.user_metadata?.name || user.email}</span>
             <Cart />
             <UserProfile />
             <Button variant="outline" onClick={handleLogout}>

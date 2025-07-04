@@ -1,46 +1,43 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, User, ShoppingCart, Edit, Trash } from 'lucide-react';
+import { Plus, ShoppingCart, Edit, Trash } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useToast } from "@/hooks/use-toast";
 import { useProducts } from '@/contexts/ProductContext';
+import { useAuth } from '@/contexts/AuthContext';
 import ReceivedOrders from '@/components/ReceivedOrders';
 
 const SellerDashboard = () => {
-  const [user, setUser] = useState<any>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
   const { products, deleteProduct, orders } = useProducts();
+  const { user, signOut } = useAuth();
 
   // Filter products to show only current seller's products
   const userProducts = products.filter(product => 
-    user && (product.sellerId === user.email || product.seller === user.name)
+    user && (product.seller_id === user.id || product.seller === user.user_metadata?.name)
   );
 
   // Filter orders that contain current seller's products
   const receivedOrders = orders.filter(order => 
     order.products.some(product => 
-      product.sellerId === user?.email || product.seller === user?.name
+      product.seller_id === user?.id || product.seller === user?.user_metadata?.name
     )
   );
 
   useEffect(() => {
-    const userData = localStorage.getItem('user');
-    if (!userData) {
-      toast({
-        title: "Access Denied",
-        description: "Please log in to access the seller dashboard.",
-        variant: "destructive"
-      });
-      navigate('/login');
+    if (!user) {
+      navigate('/auth');
       return;
     }
     
-    const parsedUser = JSON.parse(userData);
-    if (parsedUser.role !== 'seller') {
+    // Check if user role is seller
+    const userRole = user.user_metadata?.role;
+    if (userRole !== 'seller') {
       toast({
         title: "Access Denied",
         description: "This dashboard is for sellers only. Redirecting to buyer dashboard...",
@@ -49,17 +46,10 @@ const SellerDashboard = () => {
       navigate('/buyer-dashboard');
       return;
     }
-    
-    setUser(parsedUser);
-  }, [navigate, toast]);
+  }, [user, navigate, toast]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('user');
-    toast({
-      title: "Logged Out",
-      description: "You have been successfully logged out.",
-    });
-    navigate('/');
+  const handleLogout = async () => {
+    await signOut();
   };
 
   const handleDeleteProduct = (productId: string) => {
@@ -93,7 +83,7 @@ const SellerDashboard = () => {
             <h1 className="text-xl font-bold text-green-800">Seller Dashboard</h1>
           </div>
           <div className="flex items-center space-x-4">
-            <span className="text-sm text-gray-600">Welcome, {user.name}</span>
+            <span className="text-sm text-gray-600">Welcome, {user.user_metadata?.name || user.email}</span>
             <Button variant="outline" onClick={handleLogout}>
               Logout
             </Button>
@@ -130,7 +120,7 @@ const SellerDashboard = () => {
               <div className="text-2xl font-bold text-purple-600">
                 ${receivedOrders.reduce((total, order) => {
                   const myProducts = order.products.filter(product => 
-                    product.sellerId === user?.email || product.seller === user?.name
+                    product.seller_id === user?.id || product.seller === user?.user_metadata?.name
                   );
                   return total + myProducts.reduce((sum, product) => sum + (product.price * product.quantity), 0);
                 }, 0).toFixed(2)}

@@ -1,12 +1,12 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Link, useNavigate } from 'react-router-dom';
 import { User, ArrowLeft, ShoppingCart, Store, Eye, EyeOff } from 'lucide-react';
-import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -15,67 +15,33 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [selectedRole, setSelectedRole] = useState<'buyer' | 'seller' | null>(null);
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const { signIn, user } = useAuth();
+
+  useEffect(() => {
+    if (user) {
+      // Redirect authenticated users to appropriate dashboard
+      const userRole = user.user_metadata?.role || 'buyer';
+      navigate(userRole === 'seller' ? '/seller-dashboard' : '/buyer-dashboard');
+    }
+  }, [user, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!selectedRole) {
-      toast({
-        title: "Please select a role",
-        description: "Choose whether you want to login as a buyer or seller.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (!email || !password) {
-      toast({
-        title: "Missing credentials",
-        description: "Please enter both email and password.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (password.length < 6) {
-      toast({
-        title: "Invalid password",
-        description: "Password must be at least 6 characters long.",
-        variant: "destructive"
-      });
+    if (!email || !password || password.length < 6) {
       return;
     }
     
     setLoading(true);
     
-    // Simulate login process with password validation
-    setTimeout(() => {
-      const userData = { 
-        email, 
-        role: selectedRole,
-        name: email.split('@')[0],
-        id: `user_${Date.now()}`,
-        phone: '',
-        address: '',
-        city: '',
-        state: '',
-        zipCode: ''
-      };
-      
-      localStorage.setItem('user', JSON.stringify(userData));
-      
-      toast({
-        title: "Login Successful",
-        description: `Welcome back! Redirecting to ${selectedRole} dashboard...`,
-      });
-      
-      setTimeout(() => {
-        navigate(selectedRole === 'seller' ? '/seller-dashboard' : '/buyer-dashboard');
-      }, 1000);
-      
+    try {
+      const result = await signIn(email, password);
+      if (!result.error) {
+        // Redirect will happen via useEffect when user state changes
+      }
+    } finally {
       setLoading(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -97,102 +63,56 @@ const Login = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {!selectedRole ? (
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-center text-gray-700 mb-4">
-                  Choose your role
-                </h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <Button
-                    onClick={() => setSelectedRole('buyer')}
-                    className="h-24 flex flex-col items-center justify-center bg-blue-600 hover:bg-blue-700"
-                  >
-                    <ShoppingCart className="w-8 h-8 mb-2" />
-                    <span>Buyer</span>
-                    <span className="text-xs opacity-80">Buy Products</span>
-                  </Button>
-                  <Button
-                    onClick={() => setSelectedRole('seller')}
-                    className="h-24 flex flex-col items-center justify-center bg-green-600 hover:bg-green-700"
-                  >
-                    <Store className="w-8 h-8 mb-2" />
-                    <span>Seller</span>
-                    <span className="text-xs opacity-80">Sell Products</span>
-                  </Button>
-                </div>
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <Label htmlFor="email" className="text-green-700">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  required
+                  className="border-green-200 focus:border-green-400"
+                />
               </div>
-            ) : (
-              <>
-                <div className="mb-4 p-3 bg-gray-50 rounded-lg flex items-center justify-between">
-                  <div className="flex items-center">
-                    {selectedRole === 'buyer' ? (
-                      <ShoppingCart className="w-5 h-5 text-blue-600 mr-2" />
-                    ) : (
-                      <Store className="w-5 h-5 text-green-600 mr-2" />
-                    )}
-                    <span className="font-medium capitalize">{selectedRole} Login</span>
-                  </div>
+              <div>
+                <Label htmlFor="password" className="text-green-700">Password</Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your password"
+                    required
+                    minLength={6}
+                    className="border-green-200 focus:border-green-400 pr-10"
+                  />
                   <Button
+                    type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => setSelectedRole(null)}
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                    onClick={() => setShowPassword(!showPassword)}
                   >
-                    Change
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4 text-gray-400" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-gray-400" />
+                    )}
                   </Button>
                 </div>
-                
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <div>
-                    <Label htmlFor="email" className="text-green-700">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Enter your email"
-                      required
-                      className="border-green-200 focus:border-green-400"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="password" className="text-green-700">Password</Label>
-                    <div className="relative">
-                      <Input
-                        id="password"
-                        type={showPassword ? "text" : "password"}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Enter your password"
-                        required
-                        minLength={6}
-                        className="border-green-200 focus:border-green-400 pr-10"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4 text-gray-400" />
-                        ) : (
-                          <Eye className="h-4 w-4 text-gray-400" />
-                        )}
-                      </Button>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">Minimum 6 characters</p>
-                  </div>
-                  <Button 
-                    type="submit" 
-                    className={`w-full ${selectedRole === 'buyer' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'}`}
-                    disabled={loading}
-                  >
-                    {loading ? 'Signing In...' : `Sign In as ${selectedRole}`}
-                  </Button>
-                </form>
-              </>
-            )}
+                <p className="text-xs text-gray-500 mt-1">Minimum 6 characters</p>
+              </div>
+              <Button 
+                type="submit" 
+                className="w-full bg-green-600 hover:bg-green-700"
+                disabled={loading}
+              >
+                {loading ? 'Signing In...' : 'Sign In'}
+              </Button>
+            </form>
             
             <div className="mt-6 text-center">
               <p className="text-green-700">
@@ -200,12 +120,6 @@ const Login = () => {
                 <Link to="/register" className="text-green-600 hover:text-green-800 font-semibold">
                   Register here
                 </Link>
-              </p>
-            </div>
-            
-            <div className="mt-4 text-center">
-              <p className="text-sm text-gray-600">
-                Demo: Use any email and password (min 6 chars) to login
               </p>
             </div>
           </CardContent>

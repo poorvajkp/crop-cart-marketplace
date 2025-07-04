@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { User, ArrowLeft } from 'lucide-react';
-import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Register = () => {
   const [searchParams] = useSearchParams();
@@ -20,41 +20,33 @@ const Register = () => {
   });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const { signUp, user } = useAuth();
+
+  useEffect(() => {
+    if (user) {
+      // Redirect authenticated users to appropriate dashboard
+      const userRole = user.user_metadata?.role || 'buyer';
+      navigate(userRole === 'seller' ? '/seller-dashboard' : '/buyer-dashboard');
+    }
+  }, [user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (formData.password !== formData.confirmPassword) {
-      toast({
-        title: "Error",
-        description: "Passwords do not match",
-        variant: "destructive"
-      });
       return;
     }
     
     setLoading(true);
     
-    // Simulate registration process
-    setTimeout(() => {
-      localStorage.setItem('user', JSON.stringify({ 
-        email: formData.email, 
-        role: formData.role,
-        name: formData.name
-      }));
-      
-      toast({
-        title: "Registration Successful",
-        description: `Welcome to AgriMarket! Redirecting to ${formData.role} dashboard...`,
-      });
-      
-      setTimeout(() => {
-        navigate(formData.role === 'seller' ? '/seller-dashboard' : '/buyer-dashboard');
-      }, 1000);
-      
+    try {
+      const result = await signUp(formData.email, formData.password, formData.name, formData.role);
+      if (!result.error) {
+        // Stay on register page to show success message
+      }
+    } finally {
       setLoading(false);
-    }, 1500);
+    }
   };
 
   const handleInputChange = (field: string, value: string) => {
@@ -129,6 +121,7 @@ const Register = () => {
                   onChange={(e) => handleInputChange('password', e.target.value)}
                   placeholder="Create a password"
                   required
+                  minLength={6}
                   className="border-green-200 focus:border-green-400"
                 />
               </div>
@@ -144,12 +137,15 @@ const Register = () => {
                   required
                   className="border-green-200 focus:border-green-400"
                 />
+                {formData.password !== formData.confirmPassword && formData.confirmPassword && (
+                  <p className="text-red-500 text-sm mt-1">Passwords do not match</p>
+                )}
               </div>
               
               <Button 
                 type="submit" 
                 className="w-full bg-green-600 hover:bg-green-700"
-                disabled={loading || !formData.role}
+                disabled={loading || !formData.role || formData.password !== formData.confirmPassword}
               >
                 {loading ? 'Creating Account...' : 'Create Account'}
               </Button>
