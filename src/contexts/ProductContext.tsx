@@ -415,8 +415,8 @@ export const ProductProvider = ({ children }: { children: React.ReactNode }) => 
         console.log(`Updating inventory for product ${product.productId}: reducing by ${product.quantity}`);
         
         const { error: updateError } = await supabase.rpc('reduce_product_quantity', {
-          product_id: product.productId,
-          quantity_to_reduce: product.quantity
+          product_id: product.productId as string,
+          quantity_to_reduce: product.quantity as number
         });
 
         if (updateError) {
